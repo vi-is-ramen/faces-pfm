@@ -1,0 +1,17 @@
+[package]
+name = "faces-pfm"
+version = "0.1.0"
+edition = "2024"
+description = "reference implementation of `faces::AbsPageFrameManager`."
+license = "MIT OR Apache-2.0"
+readme = "README.md"
+
+[dependencies]
+bitflags = "2.13.0"
+faces = { version = "0.1.23-1", default-features = false }
+limine = "0.6.5"
+log = "0.4.32"
+spin = { version = "0.12.0", default-features = false, features = ["spin_mutex"] }
+
+[features]
+no_std = []
