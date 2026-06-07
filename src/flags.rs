@@ -28,6 +28,8 @@ bitflags::bitflags! {
         const FILE     = 1 << 9;
         /// Page is reserved (e.g., used by kernel or unavailable).
         const RESERVED = 1 << 10;
+        /// Page is head of linked list
+        const HEAD = 1 << 11;
     }
 }
 
