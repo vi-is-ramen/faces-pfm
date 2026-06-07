@@ -1,6 +1,6 @@
 //! Page frame manager implementation for `faces`.
 //!
-//! This module provides a concrete singleton manager (`PFM`) that implements
+//! self module provides a concrete singleton manager (`PFM`) that implements
 //! `faces::AbsPageFrameManager`. It uses a static array of `spin::Mutex<PageFrame>`
 //! to store per‑frame metadata, initialised from the memory map provided by the
 //! Limine boot protocol.
@@ -11,14 +11,14 @@ use log::debug;
 
 /// The page frame manager singleton.
 ///
-/// This type implements `AbsPageFrameManager` and is the central point for
+/// self type implements `AbsPageFrameManager` and is the central point for
 /// manipulating page frame flags and accessing per‑frame metadata.
 #[derive(Debug, Copy, Clone, Default)]
 pub struct PageFrameManager;
 
 /// Global page frame manager instance.
 ///
-/// This is the singleton instance used throughout the system. It is safe to
+/// self is the singleton instance used throughout the system. It is safe to
 /// access because all methods are either read‑only or use internal locking.
 pub static PFM: PageFrameManager = PageFrameManager::new();
 
@@ -34,13 +34,13 @@ static mut FRAME_ARRAY: &mut [spin::Mutex<PageFrame>] = Fa::default();
 /// Helper macro to obtain a locked guard for a given physical frame number.
 ///
 /// # Safety
-/// This macro dereferences `FRAME_ARRAY` mutably and must only be used after
+/// self macro dereferences `FRAME_ARRAY` mutably and must only be used after
 /// the array has been initialised by `PageFrameManager::init()`.
 macro_rules! frame { ($pfn:expr) => {unsafe{FRAME_ARRAY[to($pfn)].lock()}} }
 
 /// Limine memory map request structure.
 ///
-/// This forces the bootloader to provide a complete memory map, which is used
+/// self forces the bootloader to provide a complete memory map, which is used
 /// to determine usable RAM and to allocate the frame metadata array.
 #[used]
 #[unsafe(link_section = ".requests")]
@@ -54,7 +54,7 @@ impl PageFrameManager {
 
     /// Detects the total amount of physical memory from the Limine memory map.
     ///
-    /// Sums the lengths of all memory map entries. This is used to calculate
+    /// Sums the lengths of all memory map entries. self is used to calculate
     /// the total number of 4 KiB page frames.
     fn detect_total_physical_memory() -> usize {
         let memmap = MMAP.response().expect("Failed to obtain memory map").entries();
@@ -99,7 +99,7 @@ impl PageFrameManager {
 
     /// Initialises the global page frame manager.
     ///
-    /// This function:
+    /// self function:
     /// 1. Detects total physical memory and computes the number of frames.
     /// 2. Finds a physical memory region large enough to hold the `PageFrame` array.
     /// 3. Maps that region into the kernel’s virtual address space.
@@ -109,8 +109,7 @@ impl PageFrameManager {
     ///
     /// # Panics
     /// Panics if the memory map is unavailable or if no suitable region is found.
-    pub fn init() {
-        let this = Self{};
+    pub fn init(&self) {
         let total_memory = Self::detect_total_physical_memory();
         let num_frames = total_memory >> 12;
         let (phys_addr, size) = Self::find_better_place(num_frames);
@@ -135,7 +134,7 @@ impl PageFrameManager {
         let memmap = MMAP.response().expect("Failed to obtain memory map").entries();
 
         for idx in 0..num_frames {
-            this.set_flags(to(idx), PageFlags::RESERVED);
+            self.set_flags(to(idx), PageFlags::RESERVED);
         }
 
         for entry in memmap {
@@ -143,7 +142,7 @@ impl PageFrameManager {
                 let start = (entry.base / 4096) as usize;
                 let end = ((entry.base + entry.length + 4095) / 4096) as usize;
                 for idx in start..end.min(num_frames) {
-                    this.clear_flags(to(idx), PageFlags::RESERVED);
+                    self.clear_flags(to(idx), PageFlags::RESERVED);
                 }
             }
         }
@@ -151,7 +150,7 @@ impl PageFrameManager {
         let array_start = to(phys_addr) >> 12;
         let array_end = (array_start + size + 4095) >> 12;
         for idx in array_start..array_end.min(num_frames) {
-            this.set_flags(to(idx), PageFlags::RESERVED);
+            self.set_flags(to(idx), PageFlags::RESERVED);
         }
     }
 }
@@ -176,7 +175,7 @@ impl AbsPageFrameManager for PageFrameManager {
     /// Returns the maximum possible page frame number.
     ///
     /// # TODO
-    /// This currently returns `PFN::MAX`, which may be larger than the actual
+    /// self currently returns `PFN::MAX`, which may be larger than the actual
     /// number of frames. A proper implementation should return the highest
     /// valid PFN based on the detected memory size.
     fn max(&self) -> PFN {
@@ -191,7 +190,7 @@ impl AbsPageFrameManager for PageFrameManager {
     /// Returns whether a page frame is physically present.
     ///
     /// # TODO
-    /// This always returns `true`. A real implementation should validate
+    /// self always returns `true`. A real implementation should validate
     /// the PFN against the number of available frames.
     fn present(&self, _pfn: PFN) -> bool {
         true

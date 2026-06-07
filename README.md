@@ -51,7 +51,7 @@ standard library, enable the `no_std` feature:
 
 ```toml
 [dependencies]
-faces-pfm = { version = "0.1.0", default-features = false, features = ["no_std"] }
+faces-pfm = { version = "0.1", default-features = false, features = ["no_std"] }
 ```
 
 ### Initialisation

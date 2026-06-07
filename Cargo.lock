@@ -16,7 +16,7 @@ checksum = "ca94ac3b072d31d01270bef71f25ebd242dff3d6ffac288a2282c0f269b41281"
 
 [[package]]
 name = "faces-pfm"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "bitflags",
  "faces",
