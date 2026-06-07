@@ -7,7 +7,7 @@
 
 use crate::{PageFlags, PageFrame};
 use faces::{AbsPageFrameManager, Convertable as _, PhysicalAddress, to};
-use log::debug;
+use log::{debug, info};
 
 /// The page frame manager singleton.
 ///
@@ -123,19 +123,27 @@ impl PageFrameManager {
         debug!("Total frames: {}", num_frames);
         debug!("PFI array address: {:#x}", virt_addr);
 
+        info!("pfm: Initializing page frame array");
+
         unsafe {
             let slice = core::slice::from_raw_parts_mut::<'static, spin::Mutex<PageFrame>>(addr, num_frames);
             for frame in slice.iter_mut() {
-                *frame = spin::Mutex::<PageFrame>::new(PageFrame::default());
+                *frame = spin::Mutex::<PageFrame>::new(PageFrame::new());
             }
             FRAME_ARRAY = slice;
         }
 
+        info!("pfm: Obtaining memory map from bootloader");
+
         let memmap = MMAP.response().expect("Failed to obtain memory map").entries();
+
+        info!("pfm: Reserving whole array");
 
         for idx in 0..num_frames {
             self.set_flags(to(idx), PageFlags::RESERVED);
         }
+
+        info!("pfm: Searching usable memory");
 
         for entry in memmap {
             if entry.type_ == limine::memmap::MEMMAP_USABLE {
@@ -146,6 +154,8 @@ impl PageFrameManager {
                 }
             }
         }
+
+        info!("pfm: Reserving system memory areas");
 
         let array_start = to(phys_addr) >> 12;
         let array_end = (array_start + size + 4095) >> 12;
