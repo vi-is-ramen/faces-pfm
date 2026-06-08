@@ -5,7 +5,7 @@
 //! to store per‑frame metadata, initialised from the memory map provided by the
 //! Limine boot protocol.
 
-use std::marker::PhantomData;
+use core::marker::PhantomData;
 
 use crate::{PageFlags, PageFrame};
 use faces::{AbsPageFrameManager, Convertable as _, PhysicalAddress, to, AbsAddressTranslator};
