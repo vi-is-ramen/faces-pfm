@@ -7,7 +7,7 @@ use crate::PageFlags;
 /// lists, reference count, and a pointer to the kernel virtual address of
 /// the freelist header (if any). It is guaranteed to be 32‑byte aligned.
 #[derive(Debug, Default)]
-#[repr(C, align(32))]
+#[repr(C)]
 pub struct PageFrame {
     /// Page state flags (locked, dirty, reserved, etc.).
     pub flags: PageFlags,
@@ -23,8 +23,6 @@ pub struct PageFrame {
     pub rc: u16,
     /// Kernel virtual address of the freelist header (or 0 if none).
     pub freelist_va: usize,
-    /// Padding to maintain alignment and reserved for future use.
-    pub _pad: u8,
 }
 
 impl PageFrame {
@@ -44,7 +42,6 @@ impl PageFrame {
             size_class: 0,
             rc: 0,
             freelist_va: 0,
-            _pad: 0,
         }
     }
 

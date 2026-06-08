@@ -17,4 +17,4 @@ pub mod mgr;
 
 pub use flags::PageFlags;
 pub use frame::PageFrame;
-pub use mgr::PFM;
+pub use mgr::PageFrameManager;

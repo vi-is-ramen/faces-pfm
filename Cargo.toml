@@ -1,6 +1,6 @@
 [package]
 name = "faces-pfm"
-version = "0.1.3"
+version = "0.2.0"
 edition = "2024"
 description = "reference implementation of `faces::AbsPageFrameManager`."
 license = "MIT OR Apache-2.0"

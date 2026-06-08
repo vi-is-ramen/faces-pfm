@@ -5,8 +5,10 @@
 //! to store per‑frame metadata, initialised from the memory map provided by the
 //! Limine boot protocol.
 
+use std::marker::PhantomData;
+
 use crate::{PageFlags, PageFrame};
-use faces::{AbsPageFrameManager, Convertable as _, PhysicalAddress, to};
+use faces::{AbsPageFrameManager, Convertable as _, PhysicalAddress, to, AbsAddressTranslator};
 use log::{debug, info};
 
 /// The page frame manager singleton.
@@ -14,13 +16,9 @@ use log::{debug, info};
 /// self type implements `AbsPageFrameManager` and is the central point for
 /// manipulating page frame flags and accessing per‑frame metadata.
 #[derive(Debug, Copy, Clone, Default)]
-pub struct PageFrameManager;
-
-/// Global page frame manager instance.
-///
-/// self is the singleton instance used throughout the system. It is safe to
-/// access because all methods are either read‑only or use internal locking.
-pub static PFM: PageFrameManager = PageFrameManager::new();
+pub struct PageFrameManager<T: AbsAddressTranslator> {
+    phantom: PhantomData<T>,
+}
 
 type Fa = &'static mut [spin::Mutex<PageFrame>];
 
@@ -46,11 +44,11 @@ macro_rules! frame { ($pfn:expr) => {unsafe{FRAME_ARRAY[to($pfn)].lock()}} }
 #[unsafe(link_section = ".requests")]
 static MMAP: limine::request::MemmapRequest =  limine::request::MemmapRequest::new();
 
-impl PageFrameManager {
+impl<T: AbsAddressTranslator> PageFrameManager<T> {
     /// Creates a new uninitialised page frame manager.
     ///
     /// The manager is not usable until `init()` is called.
-    pub const fn new() -> Self { Self {} }
+    pub const fn new() -> Self { Self { phantom: PhantomData::<T>::default() } }
 
     /// Detects the total amount of physical memory from the Limine memory map.
     ///
@@ -77,7 +75,7 @@ impl PageFrameManager {
     /// Panics if no usable memory region of sufficient size is found.
     fn find_better_place(num_frames: usize) -> (PhysicalAddress, usize) {
         let memmap = MMAP.response().expect("Failed to obtain memory map").entries();
-        let required_size = (num_frames * core::mem::size_of::<PageFrame>()).next_multiple_of(4096);
+        let required_size = (num_frames * core::mem::size_of::<spin::Mutex<PageFrame>>()).next_multiple_of(4096);
         let mut best_start = 0;
         let mut best_len = 0;
 
@@ -113,15 +111,15 @@ impl PageFrameManager {
         let total_memory = Self::detect_total_physical_memory();
         let num_frames = total_memory >> 12;
         let (phys_addr, size) = Self::find_better_place(num_frames);
-        let virt_addr = phys_addr.to() << 12;
+        let virt_addr = T::as_virt(phys_addr);
         let addr: &mut spin::Mutex<PageFrame>;
         unsafe {
-            addr = faces::unsafe_to(to::<faces::VirtualAddress, _>(virt_addr));
+            addr = faces::unsafe_to(virt_addr);
         }
 
         debug!("Total mem: {:#x}", total_memory);
         debug!("Total frames: {}", num_frames);
-        debug!("PFI array address: {:#x}", virt_addr);
+        debug!("PFI array address: {:#x}", virt_addr.to());
 
         info!("pfm: Initializing page frame array");
 
@@ -157,9 +155,9 @@ impl PageFrameManager {
 
         info!("pfm: Reserving system memory areas");
 
-        let array_start = to(phys_addr) >> 12;
-        let array_end = (array_start + size + 4095) >> 12;
-        for idx in array_start..array_end.min(num_frames) {
+        let array_start: PFN = to(to(phys_addr) >> 12);
+        let array_end: PFN = to(to(array_start + to(size + 4095)) >> 12);
+        for idx in array_start.to()..array_end.to().min(num_frames) {
             self.set_flags(to(idx), PageFlags::RESERVED);
         }
     }
@@ -168,7 +166,7 @@ impl PageFrameManager {
 /// Type alias for a physical frame number (PFN) as defined by `faces`.
 type PFN = faces::PageFrameNumber;
 
-impl AbsPageFrameManager for PageFrameManager {
+impl<T: AbsAddressTranslator> AbsPageFrameManager for PageFrameManager<T> {
     type Flags = PageFlags;
     type Access = spin::MutexGuard<'static, PageFrame, spin::Spin>;
 
@@ -223,6 +221,18 @@ mod tests {
     use crate::PageFrame;
     use spin::Mutex;
 
+    pub struct IDEN;
+
+    impl AbsAddressTranslator for IDEN {
+        fn as_phys(v: faces::VirtualAddress) -> PhysicalAddress {
+            v.to().to()
+        }
+
+        fn as_virt(p: PhysicalAddress) -> faces::VirtualAddress {
+            p.to().to()
+        }
+    }
+
     /// Create a mock frame array of given length and leak it to a 'static mut slice.
     /// Then assign it to FRAME_ARRAY for testing.
     unsafe fn setup_mock_frames(num_frames: usize) {
@@ -251,7 +261,7 @@ mod tests {
             setup_mock_frames(10);
         }
 
-        let pfm = PageFrameManager::new();
+        let pfm = PageFrameManager::<IDEN>::new();
         let pfn = faces::to(5);
 
         // Initially no flags should be set.
@@ -289,7 +299,7 @@ mod tests {
             setup_mock_frames(3);
         }
 
-        let pfm = PageFrameManager::new();
+        let pfm = PageFrameManager::<IDEN>::new();
         let pfn = faces::to(1);
 
         // Obtain a guard and modify the frame directly.
@@ -314,7 +324,7 @@ mod tests {
 
     #[test]
     fn test_min_max_present() {
-        let pfm = PageFrameManager::new();
+        let pfm = PageFrameManager::<IDEN>::new();
         // present currently always returns true
         assert!(pfm.present(faces::to(0)));
         assert!(pfm.present(faces::to(12345)));
@@ -326,13 +336,15 @@ mod tests {
             setup_mock_frames(5);
         }
 
+        let pfm = PageFrameManager::<IDEN>::new();
+
         let pfn: faces::PageFrameNumber = faces::to(2);
         // The macro frame! should give a locked guard.
         {
             let mut guard = frame!(pfn);
             guard.flags = PageFlags::COMPOUND;
         }
-        assert!(PFM.check_flags(pfn, PageFlags::COMPOUND));
+        assert!(pfm.check_flags(pfn, PageFlags::COMPOUND));
 
         unsafe {
             teardown_mock_frames();
